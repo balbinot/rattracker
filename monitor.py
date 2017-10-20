@@ -2,44 +2,61 @@
 #-*- coding: utf-8 -*-
 
 import numpy as np
-import serial
 import Queue
 import threading
+import time
+import datetime
+
+from serial import Serial
+
+debug=False
 
 ## Serial port simulation ##
-import os, pty, serial
 from Rat import Rat
 
 ## Define some Serial read functions
 queue = Queue.Queue(0)
 
-def serial_read(s):
-    while True:
-        line = s.readline()
-        queue.put(line)
+def get_all_queue_result(queue):
 
-# Define topology and port properties
-# -----------------------------------------------
-# |        |        |         |        |        |
-# |        P1       P2        P3       P4       |
-# |        |        |         |        |        |
-# -----------------------------------------------
+    result_list = []
+    while not queue.empty():
+        result_list.append(queue.get())
+
+    return result_list
+
+def serial_read(s, q, sid):
+    while True:
+        line = s.readline().strip()
+        if debug==True:
+            print time.strftime("%Y-%m-%d %H:%M:%S"), sid, line
+        else:
+            out = ' '.join([time.strftime("%Y-%m-%d %H:%M:%S"), rats[line], sid])
+            q.put(out)
+            print out
 
 ports = {'P1': '/dev/ttyUSB0',
-         'P2': '/dev/ttyUSB1',
-         'P3': '/dev/ttyUSB2',
-         'P4': '/dev/ttyUSB3'}
+         'P2': '/dev/ttyUSB1'}
 
-ports = {'P1': '/dev/pts/20'}
+## For testing
+ports = {'P1': 'COM11',
+         'P2': 'COM22'}
+## Testing ends
 
-# Register rats; ids should match whatever ID comes out of the RFID reader
-rat1 = Rat('Steve', '001')
-rat2 = Rat('Julia', '002')
-rat3 = Rat('Mario', '003')
+## RFID tag number and some name
+rats = {'001': 'Steve',
+        '002': 'Julia',
+        '003': 'Mario'}
 
+## Open all ports and start reading
 for dooraddr in ports.itervalues():
-    reader = serial.Serial(dooraddr, baudrate=9600)
-    thread = threading.Thread(target=serial_read, args=(reader,),).start()
+    reader = Serial(dooraddr, baudrate=9600)
+    thread = threading.Thread(target=serial_read, args=(reader, queue, dooraddr),).start()
 
-for a in queue:
-    print a
+outfile = 'log_rats.dat'
+o = open(outfile, 'a', 0)
+while True:
+    result = get_all_queue_result(queue)
+    for aa in result:
+        o.write(aa+'\n')
+o.close()
